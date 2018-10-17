@@ -4,7 +4,7 @@ const rollup = require("rollup");
 const commander = require("commander");
 
 const resolve = require("rollup-plugin-node-resolve");
-const rollupTypescript = require("rollup-plugin-typescript");
+const typescript = require("rollup-plugin-typescript");
 const commonjs = require("rollup-plugin-commonjs");
 const replace = require("rollup-plugin-replace");
 const del = require("rollup-plugin-delete");
@@ -21,6 +21,10 @@ commander
     "Uses rollup to transform TS module into single importable file. <input> should be the entry file of that component."
   )
   .option("-o, --output [directory]", "Directory to write to", "dist")
+  .option(
+    "--no-resolve",
+    "Set if you do not want to bundle vendor scripts (e.g. react)"
+  )
   .option("--no-uglify", "Disable uglify")
   .action(input => {
     entryFile = input;
@@ -36,28 +40,36 @@ if (!entryFile) {
  */
 const plugins = [
   del({ targets: `${commander.output}/*` /* , verbose: true */ }),
-  replace({
-    // Fix for react expecting process.env.NODE_ENV to be set
-    // This will replace `if (process.env.NODE_ENV !== 'production')` with `if ("production" !== 'production')`
-    // That block will later be removed by rollup because it's dead-code
-    "process.env.NODE_ENV": JSON.stringify("production")
-  }),
-  rollupTypescript(),
-  resolve(),
-  commonjs({
-    include: "node_modules/**",
-    // Fix react's exports
-    namedExports: {
-      "node_modules/react/index.js": [
-        "Component",
-        "PureComponent",
-        "Fragment",
-        "Children",
-        "createElement"
-      ]
-    }
-  })
+  typescript()
 ];
+
+// Resolve 3rd party scripts and put into bundle
+if (commander.resolve) {
+  plugins.push(
+    replace({
+      // Fix for react expecting process.env.NODE_ENV to be set
+      // This will replace `if (process.env.NODE_ENV !== 'production')` with `if ("production" !== 'production')`
+      // That block will later be removed by rollup because it's dead-code
+      "process.env.NODE_ENV": JSON.stringify("production")
+    })
+  );
+  plugins.push(resolve());
+  plugins.push(
+    commonjs({
+      include: "node_modules/**",
+      // Fix react's exports
+      namedExports: {
+        "node_modules/react/index.js": [
+          "Component",
+          "PureComponent",
+          "Fragment",
+          "Children",
+          "createElement"
+        ]
+      }
+    })
+  );
+}
 
 // Uglify output if not otherwise chosen by user
 if (commander.uglify) {
