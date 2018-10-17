@@ -1,0 +1,23 @@
+{
+  "name": "rollup-importable-module",
+  "version": "1.0.0",
+  "description": "Transpile TS source into a single importable module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/eljenso/rollup-importable-module.git"
+  },
+  "keywords": [
+    "rollup",
+    "typescript"
+  ],
+  "author": "Jens Böttcher <eljenso.boettcher@gmail.com>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/eljenso/rollup-importable-module/issues"
+  },
+  "homepage": "https://github.com/eljenso/rollup-importable-module#readme"
+}
