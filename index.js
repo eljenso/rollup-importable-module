@@ -3,12 +3,10 @@
 const rollup = require("rollup");
 const commander = require("commander");
 
-const resolve = require("rollup-plugin-node-resolve");
 const typescript = require("rollup-plugin-typescript");
-const commonjs = require("rollup-plugin-commonjs");
-const replace = require("rollup-plugin-replace");
 const del = require("rollup-plugin-delete");
-const terser = require("rollup-plugin-terser").terser;
+const { terser } = require("rollup-plugin-terser");
+const postcss = require("rollup-plugin-postcss");
 
 let entryFile;
 
@@ -21,10 +19,7 @@ commander
     "Uses rollup to transform TS module into single importable file. <input> should be the entry file of that component."
   )
   .option("-o, --output [directory]", "Directory to write to", "dist")
-  .option(
-    "--no-resolve",
-    "Set if you do not want to bundle vendor scripts (e.g. react)"
-  )
+  // .option("-w, --watch", "Watch mode")
   .option("--no-uglify", "Disable uglify")
   .action(input => {
     entryFile = input;
@@ -35,41 +30,49 @@ if (!entryFile) {
   throw new Error("Input must be defined! Use -h for help.");
 }
 
+// Rewrite all bare imports to be served by a CDN
+function importFromJSPM({ cdnUrl }) {
+  return {
+    name: "import-from-jspm",
+    renderChunk: (code, { imports }) => {
+      const relativePathRegex = new RegExp("^\\.\\.?\\/");
+      for (const importLiteral of imports) {
+        if (!relativePathRegex.test(importLiteral)) {
+          const cdnPath = `"${cdnUrl}/${importLiteral}"`;
+          console.log("Rewriting import:");
+          console.log(`'${importLiteral}' → ${cdnPath}`);
+
+          // TODO: Improve replacement (e.g. look at import statements as a whole)
+          code = code
+            .replace(`'${importLiteral}'`, cdnPath)
+            .replace(`"${importLiteral}"`, cdnPath);
+        }
+      }
+      return { code, map: null };
+    }
+  };
+}
+
 /**
  * Plugins to use with rollup
  */
 const plugins = [
-  del({ targets: `${commander.output}/*` /* , verbose: true */ }),
-  typescript()
-];
+  // Clear dist folder
+  del({ targets: `${commander.output}/*` }),
 
-// Resolve 3rd party scripts and put into bundle
-if (commander.resolve) {
-  plugins.push(
-    replace({
-      // Fix for react expecting process.env.NODE_ENV to be set
-      // This will replace `if (process.env.NODE_ENV !== 'production')` with `if ("production" !== 'production')`
-      // That block will later be removed by rollup because it's dead-code
-      "process.env.NODE_ENV": JSON.stringify("production")
-    })
-  );
-  plugins.push(resolve());
-  plugins.push(
-    commonjs({
-      include: "node_modules/**",
-      // Fix react's exports
-      namedExports: {
-        "node_modules/react/index.js": [
-          "Component",
-          "PureComponent",
-          "Fragment",
-          "Children",
-          "createElement"
-        ]
-      }
-    })
-  );
-}
+  // Enable TS support
+  typescript(),
+
+  // Compile and insert styles into JS
+  postcss({
+    extensions: [".css", ".sss", ".pcss", ".less", ".scss"]
+  }),
+
+  // Import bare imports from CDN
+  importFromJSPM({
+    cdnUrl: "https://dev.jspm.io"
+  })
+];
 
 // Uglify output if not otherwise chosen by user
 if (commander.uglify) {
@@ -78,7 +81,6 @@ if (commander.uglify) {
 
 const inputOptions = {
   input: entryFile,
-  // experimentalCodeSplitting: true,
   plugins
 };
 
@@ -89,15 +91,64 @@ const outputOptions = {
   sourcemap: true
 };
 
-async function build() {
-  // Create a bundle
-  console.log(`Starting to bundle module with entry ${entryFile}...`);
-  const bundle = await rollup.rollup(inputOptions);
+if (!commander.watch) {
+  async function build() {
+    try {
+      // Create bundle
+      console.log(`Starting to bundle module with entry ${entryFile}...`);
+      const bundle = await rollup.rollup(inputOptions);
 
-  // Write the bundle to disk
-  console.log(`Writing bundle to ${outputFile}.`);
-  await bundle.write(outputOptions);
+      // Write bundle to disk
+      console.log(`Writing bundle to ${outputFile}.`);
+      await bundle.write(outputOptions);
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  // Do it!
+  build();
+} else {
+  const watcher = rollup.watch({
+    ...inputOptions,
+    output: [outputOptions],
+    watch: {
+      chokidar: true,
+      clearScreen: true,
+      exclude: "node_modules/**"
+    }
+  });
+
+  watcher.on("event", event => {
+    switch (event.code) {
+      // Watcher is (re)starting
+      case "START": {
+        break;
+      }
+      // Building an individual bundle
+      case "BUNDLE_START": {
+        break;
+      }
+      // Finished building a bundle
+      case "BUNDLE_END": {
+        break;
+      }
+      // Finished building all bundles
+      case "END": {
+        break;
+      }
+
+      // Encountered an error while bundling
+      case "ERROR": {
+        console.error(event.error);
+        // watcher.close();
+        break;
+      }
+
+      // Encountered an unrecoverable error
+      case "FATAL": {
+        throw new Error(event);
+      }
+    }
+  });
 }
-
-// Do it!
-build();
