@@ -2,6 +2,7 @@
 
 const rollup = require("rollup");
 const commander = require("commander");
+const { execSync } = require("child_process");
 
 const typescript = require("rollup-plugin-typescript");
 const del = require("rollup-plugin-delete");
@@ -19,8 +20,10 @@ commander
     "Uses rollup to transform TS module into single importable file. <input> should be the entry file of that component."
   )
   .option("-o, --output [directory]", "Directory to write to", "dist")
+  .option("-p, --packages", "Path to local package.json file", "package.json")
   // .option("-w, --watch", "Watch mode")
   .option("--no-uglify", "Disable uglify")
+  .option("--no-sourcemap", "Disable sourcemap")
   .action(input => {
     entryFile = input;
   })
@@ -30,15 +33,32 @@ if (!entryFile) {
   throw new Error("Input must be defined! Use -h for help.");
 }
 
+const { dependencies } = require("./package.json");
+if (!dependencies) {
+  throw new Error("Invalid package.json provided! Use -h for help.");
+}
+
 // Rewrite all bare imports to be served by a CDN
-function importFromJSPM({ cdnUrl }) {
+function importFromCDN({ cdnUrl }) {
   return {
     name: "import-from-jspm",
     renderChunk: (code, { imports }) => {
       const relativePathRegex = new RegExp("^\\.\\.?\\/");
       for (const importLiteral of imports) {
         if (!relativePathRegex.test(importLiteral)) {
-          const cdnPath = `"${cdnUrl}/${importLiteral}"`;
+          let version;
+          try {
+            version = execSync(`npm view ${importLiteral} version`, {
+              encoding: "utf8"
+            }).trim();
+            version = `@${version}`;
+          } catch (e) {
+            console.error(e);
+            version = "";
+          }
+
+          const cdnPath = `"${cdnUrl}/${importLiteral}${version}"`;
+
           console.log("Rewriting import:");
           console.log(`'${importLiteral}' → ${cdnPath}`);
 
@@ -69,7 +89,7 @@ const plugins = [
   }),
 
   // Import bare imports from CDN
-  importFromJSPM({
+  importFromCDN({
     cdnUrl: "https://dev.jspm.io"
   })
 ];
@@ -88,7 +108,7 @@ const outputFile = `${commander.output}/index.js`;
 const outputOptions = {
   file: outputFile,
   format: "es",
-  sourcemap: true
+  sourcemap: commander.sourcemap
 };
 
 if (!commander.watch) {
