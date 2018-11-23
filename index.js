@@ -3,6 +3,7 @@
 const rollup = require("rollup");
 const commander = require("commander");
 const { execSync } = require("child_process");
+const path = require("path");
 
 const typescript = require("rollup-plugin-typescript");
 const del = require("rollup-plugin-delete");
@@ -33,7 +34,7 @@ if (!entryFile) {
   throw new Error("Input must be defined! Use -h for help.");
 }
 
-const { dependencies } = require("./package.json");
+const { dependencies } = require(path.resolve(process.cwd(), "package.json"));
 if (!dependencies) {
   throw new Error("Invalid package.json provided! Use -h for help.");
 }
