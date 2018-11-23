@@ -102,6 +102,7 @@ if (commander.uglify) {
 
 const inputOptions = {
   input: entryFile,
+  external: Object.keys(dependencies),
   plugins
 };
 
@@ -117,6 +118,18 @@ if (!commander.watch) {
     try {
       // Create bundle
       console.log(`Starting to bundle module with entry ${entryFile}...`);
+      if (dependencies) {
+        const depsString = Object.keys(dependencies).reduce(
+          (prevString, dependency) => {
+            if (prevString) return `${prevString}, ${dependency}`;
+            return dependency;
+          },
+          ""
+        );
+
+        console.log(`Treating these dependencies as externals: ${depsString}`);
+      }
+
       const bundle = await rollup.rollup(inputOptions);
 
       // Write bundle to disk
