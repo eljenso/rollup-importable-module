@@ -45,17 +45,16 @@ function importFromCDN({ cdnUrl }) {
     name: "import-from-jspm",
     renderChunk: (code, { imports }) => {
       const relativePathRegex = new RegExp("^\\.\\.?\\/");
+
       for (const importLiteral of imports) {
         if (!relativePathRegex.test(importLiteral)) {
-          let version;
+          let version = "";
           try {
-            version = execSync(`npm view ${importLiteral} version`, {
-              encoding: "utf8"
-            }).trim();
-            version = `@${version}`;
+            if (importLiteral in dependencies) {
+              version = `@${dependencies[importLiteral].replace(/[\^~]/, "")}`;
+            }
           } catch (e) {
             console.error(e);
-            version = "";
           }
 
           const cdnPath = `"${cdnUrl}/${importLiteral}${version}"`;
