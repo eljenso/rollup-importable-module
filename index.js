@@ -2,7 +2,6 @@
 
 const rollup = require("rollup");
 const commander = require("commander");
-const { execSync } = require("child_process");
 const path = require("path");
 
 const typescript = require("rollup-plugin-typescript");
@@ -39,40 +38,6 @@ if (!dependencies) {
   throw new Error("Invalid package.json provided! Use -h for help.");
 }
 
-// Rewrite all bare imports to be served by a CDN
-function importFromCDN({ cdnUrl }) {
-  return {
-    name: "import-from-jspm",
-    renderChunk: (code, { imports }) => {
-      const relativePathRegex = new RegExp("^\\.\\.?\\/");
-
-      for (const importLiteral of imports) {
-        if (!relativePathRegex.test(importLiteral)) {
-          let version = "";
-          try {
-            if (importLiteral in dependencies) {
-              version = `@${dependencies[importLiteral].replace(/[\^~]/, "")}`;
-            }
-          } catch (e) {
-            console.error(e);
-          }
-
-          const cdnPath = `"${cdnUrl}/${importLiteral}${version}"`;
-
-          console.log("Rewriting import:");
-          console.log(`'${importLiteral}' → ${cdnPath}`);
-
-          // TODO: Improve replacement (e.g. look at import statements as a whole)
-          code = code
-            .replace(`'${importLiteral}'`, cdnPath)
-            .replace(`"${importLiteral}"`, cdnPath);
-        }
-      }
-      return { code, map: null };
-    }
-  };
-}
-
 /**
  * Plugins to use with rollup
  */
@@ -86,11 +51,6 @@ const plugins = [
   // Compile and insert styles into JS
   postcss({
     extensions: [".css", ".sss", ".pcss", ".less", ".scss"]
-  }),
-
-  // Import bare imports from CDN
-  importFromCDN({
-    cdnUrl: "https://dev.jspm.io"
   })
 ];
 
